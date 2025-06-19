@@ -38,15 +38,19 @@ const recordSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   id: { type: Number, required: true },
   date: { type: String, required: true },
-  time: { type: String, required: true },
-  type: { type: String, required: true }, // 'feeding' or 'diaper'
+  time: { type: String }, // Not required for sleep
+  type: { type: String, required: true }, // 'feeding', 'diaper', or 'sleep'
   feedingType: { type: String }, // For feeding records
   diaperType: { type: String }, // For diaper records
   details: { type: String },
   amount: { type: Number }, // For feeding records
-  timestamp: { type: Number, required: true }
+  timestamp: { type: Number, required: true },
+  // Sleep-specific fields:
+  startTime: { type: String }, // For sleep records
+  endTime: { type: String },   // For sleep records
+  duration: { type: Number },  // For sleep records (minutes)
+  notes: { type: String }      // For sleep records
 });
-
 // Create models
 const User = mongoose.model('User', userSchema);
 const Record = mongoose.model('Record', recordSchema);
@@ -128,25 +132,29 @@ app.post('/api/users/login', async (req, res) => {
 // Create/update record
 app.post('/api/records', auth, async (req, res) => {
   try {
-    const { id, date, time, type, feedingType, diaperType, details, amount, timestamp } = req.body;
-    
+    const { id, date, time, type, feedingType, diaperType, details, amount, timestamp, startTime, endTime, duration, notes } = req.body;
+
     // Check if record exists (for updates)
     let record = await Record.findOne({ user: req.user._id, id });
-    
+
     if (record) {
       // Update existing record
       record.date = date;
       record.time = time;
       record.type = type;
+      record.details = details;
+      record.timestamp = timestamp;
       if (type === 'feeding') {
         record.feedingType = feedingType;
         record.amount = amount;
-      } else {
+      } else if (type === 'diaper') {
         record.diaperType = diaperType;
+      } else if (type === 'sleep') {
+        record.startTime = startTime;
+        record.endTime = endTime;
+        record.duration = duration;
+        record.notes = notes;
       }
-      record.details = details;
-      record.timestamp = timestamp;
-      
       await record.save();
     } else {
       // Create new record
@@ -160,12 +168,15 @@ app.post('/api/records', auth, async (req, res) => {
         diaperType: type === 'diaper' ? diaperType : undefined,
         details,
         amount: type === 'feeding' ? amount : undefined,
-        timestamp
+        timestamp,
+        startTime: type === 'sleep' ? startTime : undefined,
+        endTime: type === 'sleep' ? endTime : undefined,
+        duration: type === 'sleep' ? duration : undefined,
+        notes: type === 'sleep' ? notes : undefined
       });
-      
       await record.save();
     }
-    
+
     res.status(201).json(record);
   } catch (error) {
     res.status(500).json({ error: error.message });
